@@ -1,4 +1,5 @@
 import re
+from calendar import monthrange
 from datetime import date, timedelta
 
 _NUMBERS = {
@@ -72,9 +73,9 @@ _NUMBERS.update(
 _UNIT_DAYS = {"day": 1, "week": 7, "month": 30, "year": 365}
 
 
-def _duration(text: str) -> int:
+def _duration(text: str) -> tuple[int, int, int]:
     """Read one or more quantities, rejecting any unmatched text."""
-    total = 0
+    months = days = approximate_days = 0
     terms = re.split(r"\s+and\s+|,\s*", text)
     for term in terms:
         match = re.fullmatch(r"(.+?) (days?|weeks?|months?|years?)", term)
@@ -97,12 +98,33 @@ def _duration(text: str) -> int:
             count = _NUMBERS[words[0]] + _NUMBERS[words[1]]
         else:
             raise ValueError(f"Unrecognized quantity: {amount!r}")
-        total += count * _UNIT_DAYS[unit.rstrip("s")]
-    return total
+        unit = unit.rstrip("s")
+        approximate_days += count * _UNIT_DAYS[unit]
+        if unit in {"month", "year"}:
+            months += count * (12 if unit == "year" else 1)
+        else:
+            days += count * _UNIT_DAYS[unit]
+    return months, days, approximate_days
+
+
+def _shift(reference: date, duration: str, direction: int) -> date:
+    """Shift calendar months first, clamp the day, then shift days."""
+    months, days, _ = _duration(duration)
+    year, month_index = divmod(
+        reference.year * 12 + reference.month - 1 + direction * months, 12
+    )
+    if not 1 <= year <= 9999:
+        raise ValueError("Date falls outside the supported year range")
+    month = month_index + 1
+    day = min(reference.day, monthrange(year, month)[1])
+    try:
+        return date(year, month, day) + timedelta(days=direction * days)
+    except OverflowError as error:
+        raise ValueError("Date falls outside the supported year range") from error
 
 
 def parse(s: str, today: date | None = None) -> date:
-    """Parse common English dates relative to today (months mean 30 days)."""
+    """Parse English dates; `in` durations retain 30-day month approximations."""
     reference = date.today() if today is None else today
     text = " ".join(s.lower().split())
 
@@ -139,17 +161,26 @@ def parse(s: str, today: date | None = None) -> date:
         days = -((-difference) % 7 or 7) if direction == "last" else difference % 7
         return reference + timedelta(days=days)
 
+    period = re.fullmatch(r"(next|last|this) (day|week|month|year)", text)
+    if period:
+        direction, unit = period.groups()
+        sign = {"next": 1, "last": -1, "this": 0}[direction]
+        return _shift(reference, f"1 {unit}", sign)
+
     # Reduce relative phrases to a duration and a date to count from.
     if text.startswith("in "):
-        return reference + timedelta(days=_duration(text[3:]))
+        # Preserve the original assignment tests' fixed 30-day months.
+        _, _, days = _duration(text[3:])
+        return reference + timedelta(days=days)
     if text.endswith(" ago"):
-        return reference - timedelta(days=_duration(text[:-4]))
+        return _shift(reference, text[:-4], -1)
 
     relative = re.fullmatch(r"(.+?) (before|after|from) (.+)", text)
     if relative:
         duration, direction, anchor = relative.groups()
-        days = _duration(duration) * (-1 if direction == "before" else 1)
-        return parse(anchor, reference) + timedelta(days=days)
+        return _shift(
+            parse(anchor, reference), duration, -1 if direction == "before" else 1
+        )
 
     absolute = re.fullmatch(
         r"([a-z]+)\.? (\d{1,2})(?:st|nd|rd|th)?(?:,? (\d{4}))?", text

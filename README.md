@@ -20,8 +20,18 @@ Quantities accept nonnegative integers, number words zero through ninety-nine,
 and `a`/`an`. Compound durations use `and` or commas. Input ignores case and
 extra whitespace. Numeric separators must match within a date.
 
-Semantics: months are 30 days and years are 365 days, rather than calendar
-arithmetic. Next/this/bare weekdays mean the next occurrence including today;
+Semantics: `ago`, `before`, `after`, and `from` use calendar months and years.
+Month and year quantities are combined into one month shift, the day is clamped
+to the destination month's last valid day, and day/week offsets are applied last.
+For example, one month before March 31 is February 28 (29 in a leap year).
+`next`, `last`, and `this` also accept day, week, month, and year.
+
+Compatibility exception: `in ...` retains the original tests' approximation of
+30 days per month and 365 days per year. Thus `in two months` and `two months
+from now` can differ. This preserves the supplied assertions while supporting
+the inferred calendar semantics of the boss's `2 months ago` feedback.
+
+Next/this/bare weekdays mean the next occurrence including today;
 last weekdays mean the preceding occurrence, excluding today. Numeric year-last
 dates always use US month/day order. These conventions avoid guessing from locale.
 
