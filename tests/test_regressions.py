@@ -9,6 +9,8 @@ from nldate import parse
     ("text", "expected"),
     [
         ("2025-12-04", date(2025, 12, 4)),
+        ("2025/12/04", date(2025, 12, 4)),
+        ("2024/02/29", date(2024, 2, 29)),
         ("2024-02-29", date(2024, 2, 29)),
         (" 2025-12-04 ", date(2025, 12, 4)),
         ("5 days before 2025-12-04", date(2025, 11, 29)),
@@ -23,7 +25,17 @@ def test_fixed_reference(text: str, expected: date) -> None:
 
 @pytest.mark.parametrize(
     "text",
-    ["", "   ", "not a date", "2025-02-29", "2025-13-04", "February 30"],
+    [
+        "",
+        "   ",
+        "not a date",
+        "2025-02-29",
+        "2025-13-04",
+        "February 30",
+        "2025/02/29",
+        "2025/13/04",
+        "2025/12-04",
+    ],
 )
 def test_invalid_dates(text: str) -> None:
     with pytest.raises(ValueError):
