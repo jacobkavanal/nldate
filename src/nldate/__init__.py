@@ -66,6 +66,9 @@ def parse(s: str, today: date | None = None) -> date:
     reference = date.today() if today is None else today
     text = " ".join(s.lower().split())
 
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", text):
+        return date.fromisoformat(text)
+
     offsets = {"today": 0, "tomorrow": 1, "day after tomorrow": 2}
     if text in offsets:
         return reference + timedelta(days=offsets[text])
